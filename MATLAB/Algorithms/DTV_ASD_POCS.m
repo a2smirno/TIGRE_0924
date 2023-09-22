@@ -1,14 +1,13 @@
-function [ f,qualMeasOut]= AwASD_POCS(proj,geo,angles,niter,varargin)
-%AwASD_POCS Solves the 3D tomography problem using the adaptive-weighted
-%ASD_POCS algorithm which extends from the method ASD_POCS available in the
-%TIGRE toolbox by adding weight equation to better preserve the edge of the
-%reconstructed image
+function [ f,qualMeasOut]= DTV_ASD_POCS(proj,geo,angles,niter,varargin)
+%dTV_ASD_POCS Solves the 3D tomography problem using the adaptive-weighted
+%dTV_ASD_POCS algorithm which extends from the method ASD_POCS available in the
+%TIGRE toolbox by changing TV discretization to dual TV, proposed by L. Condat 
 %
-%   AwASD_POCS(PROJ,GEO,ALPHA,NITER) added adaptive-weighted solves the reconstruction problem
+%   dTV_ASD_POCS(PROJ,GEO,ALPHA,NITER) added adaptive-weighted solves the reconstruction problem
 %   using the projection data PROJ taken over ALPHA angles, corresponding
 %   to the geometry descrived in GEO, using NITER iterations.
 %
-%   AwASD_POCS(PROJ,GEO,ALPHA,NITER,OPT,VAL,...) uses options and values for solving. The
+%   dTV_ASD_POCS(PROJ,GEO,ALPHA,NITER,OPT,VAL,...) uses options and values for solving. The
 %   possible options in OPT are:
 %
 %
@@ -58,19 +57,9 @@ function [ f,qualMeasOut]= AwASD_POCS(proj,geo,angles,niter,varargin)
 %                 data.
 %--------------------------------------------------------------------------
 %--------------------------------------------------------------------------
-% This file is part of the TIGRE Toolbox
-%
-% Copyright (c) 2015, University of Bath and
-%                     CERN-European Organization for Nuclear Research
-%                     All rights reserved.
-%
-% License:            Open Source under BSD.
-%                     See the full license at
-%                     https://github.com/CERN/TIGRE/blob/master/LICENSE
-%
-% Contact:            tigre.toolbox@gmail.com
-% Codes:              https://github.com/CERN/TIGRE/
-% Coded by:           Ander Biguri and Manasavee Lohvithee
+% Contact:            a2smirno@uwaterloo.ca
+% Codes:              
+% Coded by:           Alexey Smirnov and Ander Biguri
 
 %% parse inputs
 blocksize=1;
@@ -183,17 +172,10 @@ while ~stop_criteria %POCS
     end
     f0=f;
     
-    %  TV MINIMIZATION
+    %  TV MINIMIZATION (NEW FROM AwASD_POCS and ASD_POCS)
     % =========================================================================
     %  Call GPU to minimize TV
-    f=minimizeAwTV(f0,dtvg,ng,delta,'gpuids',gpuids);    %   This is the MATLAB CODE, the functions are sill in the library, but CUDA is used nowadays
-    %                                                       for ii=1:ng
-    %                                                          % Steepest descend of TV norm
-    %                                                            tv(ng*(iter-1)+ii)=im3Dnorm(f,'TV','forward');
-    %                                                            df=weighted_gradientTVnorm(f,delta);
-    %                                                            df=df./im3Dnorm(df,'L2');
-    %                                                            f=f-dtvg.*df;
-    %                                                        end
+    f=minimizeDTV(f0,dtvg,ng,delta,'gpuids',gpuids);    
     
     % update parameters
     % ==========================================================================
@@ -226,7 +208,7 @@ while ~stop_criteria %POCS
     
     if (iter==1 && verbose==1)
         expected_time=toc*niter;
-        disp('AwASD_POCS');
+        disp('dTV_ASD_POCS');
         disp(['Expected duration  :    ',secs2hms(expected_time)]);
         disp(['Expected finish time:    ',datestr(datetime('now')+seconds(expected_time))]);
         disp('');
@@ -242,7 +224,7 @@ defaults=ones(length(opts),1);
 % Check inputs
 nVarargs = length(argin);
 if mod(nVarargs,2)
-    error('TIGRE:AwASD_POCS:InvalidInput','Invalid number of inputs')
+    error('TIGRE:dTV_ASD_POCS:InvalidInput','Invalid number of inputs')
 end
 
 % check if option has been passed as input
@@ -251,7 +233,7 @@ for ii=1:2:nVarargs
     if ~isempty(ind)
         defaults(ind)=0;
     else
-        error('TIGRE:AwASD_POCS:InvalidInput',['Optional parameter "' argin{ii} '" does not exist' ]);
+        error('TIGRE:dTV_ASD_POCS:InvalidInput',['Optional parameter "' argin{ii} '" does not exist' ]);
     end
 end
 
@@ -266,7 +248,7 @@ for ii=1:length(opts)
             jj=jj+1;
         end
         if isempty(ind)
-            error('TIGRE:AwASD_POCS:InvalidInput',['Optional parameter "' argin{jj} '" does not exist' ]);
+            error('TIGRE:dTV_ASD_POCS:InvalidInput',['Optional parameter "' argin{jj} '" does not exist' ]);
         end
         val=argin{jj};
     end
@@ -291,7 +273,7 @@ for ii=1:length(opts)
                 beta=1;
             else
                 if length(val)>1 || ~isnumeric( val)
-                    error('TIGRE:AwASD_POCS:InvalidInput','Invalid lambda')
+                    error('TIGRE:dTV_ASD_POCS:InvalidInput','Invalid lambda')
                 end
                 beta=val;
             end
@@ -302,7 +284,7 @@ for ii=1:length(opts)
                 beta_red=0.99;
             else
                 if length(val)>1 || ~isnumeric( val)
-                    error('TIGRE:AwASD_POCS:InvalidInput','Invalid lambda')
+                    error('TIGRE:dTV_ASD_POCS:InvalidInput','Invalid lambda')
                 end
                 beta_red=val;
             end
@@ -316,7 +298,7 @@ for ii=1:length(opts)
                 if strcmp(val,'FDK')
                     f0=FDK(proj, geo, angles);
                 else
-                    error('TIGRE:AwASD_POCS:InvalidInput','Invalid init')
+                    error('TIGRE:dTV_ASD_POCS:InvalidInput','Invalid init')
                 end
             end
             % Number of iterations of TV
@@ -383,7 +365,7 @@ for ii=1:length(opts)
                 if iscellstr(val)
                     QualMeasOpts=val;
                 else
-                    error('TIGRE:AwASD_POCS:InvalidInput','Invalid quality measurement parameters');
+                    error('TIGRE:dTV_ASD_POCS:InvalidInput','Invalid quality measurement parameters');
                 end
             end
             %  Non negative
@@ -415,7 +397,7 @@ for ii=1:length(opts)
                 gt=val;
             end
         otherwise
-            error('TIGRE:AwASD_POCS:InvalidInput',['Invalid input name:', num2str(opt),'\n No such option in AwASD_POCS()']);
+            error('TIGRE:dTV_ASD_POCS:InvalidInput',['Invalid input name:', num2str(opt),'\n No such option in dTV_ASD_POCS()']);
             
     end
 end
